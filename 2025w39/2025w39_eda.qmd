@@ -1,0 +1,51 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+# Loading Library and Data
+
+```{r}
+library(tidyverse)
+library(here)
+
+cranes <- readr::read_csv(
+  'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-30/cranes.csv'
+)
+```
+
+
+# EDA
+
+- there seems to only be certain times of the year where the cranes are counted
+
+plotting which parts of the year there are observations
+```{r}
+cranes |>
+  mutate(
+    year = year(date),
+    day_of_year = yday(date)
+  ) |>
+  ggplot(aes(x = day_of_year, y = year, z = !is.na(date))) +
+  geom_tile() +
+  theme_classic()
+```
+
+- most of the observations are made are the beginning of the year and end of the year, the observations in the beginning of the year are more contiguous, vs the ones later in the year where observations are made every 2-3 days
+
+
+
+
+
+plotting time series of crane observations, grouped by year
+```{r}
+cranes |>
+  mutate(
+    year = year(date),
+    day_of_year = yday(date)
+  ) |>
+  ggplot(aes(x = day_of_year, y = observations, colour = year)) +
+  geom_point() +
+  theme_classic()
+```

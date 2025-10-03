@@ -1,0 +1,132 @@
+---
+title: "TidyTuesday 2025 #38"
+format: html
+---
+
+Tidy Tuesday for the week of "2025-09-23"
+
+
+# Load Libraries
+
+```{r}
+library(here)
+library(tidyverse)
+```
+
+# Load Data
+
+```{r}
+fide_ratings_august <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-23/fide_ratings_august.csv')
+fide_ratings_september <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-23/fide_ratings_september.csv')
+```
+
+
+# EDA
+
+
+distribution of ratings
+```{r}
+
+# Plotting ratings distributions by colour
+fide_ratings_august |>
+    ggplot(aes(x = rating, colour = fed)) + 
+    geom_density() +
+    theme(legend.position = "none")
+
+fide_ratings_september |>
+    ggplot(aes(x = rating, colour = fed)) + 
+    geom_density() +
+    theme(legend.position = "none")
+
+
+fide_ratings_september |> 
+    group_by(fed) |> 
+    summarise(
+        median_rating = median(rating),
+        n = n()
+    ) |> 
+    arrange(desc(median_rating))
+
+
+```
+
+
+# Biggest change in elo between Aug -> Sep
+
+```{r}
+
+library(here)
+library(tidyverse)
+
+fide_ratings_august <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-23/fide_ratings_august.csv')
+fide_ratings_september <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-23/fide_ratings_september.csv')
+
+
+rating_change <- bind_rows(
+    fide_ratings_august |> 
+        select(id, name, rating, fed) |> 
+        mutate(month = "Aug"),
+    fide_ratings_september |> 
+        select(id, name, rating, fed) |> 
+        mutate(month = "Sep")
+) |> 
+    pivot_wider(
+        id_cols = c("id", "name", "fed"), 
+        names_from = "month", 
+        values_from = "rating"
+    )  |> 
+    mutate(rating_change = Sep - Aug) 
+
+
+bind_rows(
+    rating_change |> arrange(rating_change) |> head(10),
+    rating_change |> arrange(desc(rating_change)) |> head(10)
+) |> 
+    pivot_longer(cols = c("Aug", "Sep"), names_to = "month", values_to = "rating") |> 
+    mutate(name = fct_reorder(name, rating_change)) |> 
+    ggplot(aes(y = name)) + 
+    geom_point(aes(x = rating, colour = month), size = 2) + 
+    geom_segment(
+        data = rating_change |> arrange(desc(rating_change)) |> head(10),
+        aes(x = Aug, xend = Sep, y = name), 
+        arrow = arrow(length = unit(0.3, "cm")),
+        colour = "green"
+    ) +
+    geom_segment(
+        data = rating_change |> arrange(rating_change) |> head(10),
+        aes(x = Aug, xend = Sep, y = name), 
+        arrow = arrow(length = unit(0.3, "cm")),
+        colour = "red"
+    ) + 
+    geom_text(
+        data = rating_change |> arrange(desc(rating_change)) |> head(10),
+        aes(x = Sep + 50, y = name, label = rating_change), 
+        size = 3
+    ) +
+    geom_text(
+        data = rating_change |> arrange(rating_change) |> head(10),
+        aes(x = Sep - 55, y = name, label = rating_change), 
+        size = 3
+    ) +
+    xlab("ELO Rating") + 
+    ylab("Player Name") + 
+    theme_classic() +
+    ggtitle("10 Largest Chess ELO Rating Increases and\nDecreases Between Aug and Sep 2025")
+```
+
+
+# Distribution of ratings by sex
+```{r}
+fide_ratings_august |> 
+    ggplot(aes(x = bday)) + 
+    geom_histogram() + 
+    facet_wrap(~sex, ncol = 1) + 
+    ggtitle("Distribution of player's age, Facet by Sex")
+```
+
+
+```{r}
+fide_ratings_august |> 
+    ggplot(aes(x=bday, y=rating)) + 
+    geom_density2d()
+```

@@ -1,0 +1,21 @@
+---
+title: "Untitled"
+format: html
+---
+
+tidytuesday for the week of 2025-09-16
+
+- ideas:
+    - get a list of recipies given a set of ingredients
+
+```{r}
+library(tidyverse)
+```
+
+
+# Load Data
+
+```{r}
+all_recipes <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-16/all_recipes.csv')
+cuisines <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-16/cuisines.csv')
+```
