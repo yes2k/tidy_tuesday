@@ -53,6 +53,21 @@ cranes |>
   theme_classic()
 ```
 
+plotting faceted by year
+```{r}
+cranes |>
+  mutate(
+    year = year(date),
+    day_of_year = yday(date)
+  ) |>
+  ggplot(aes(x = day_of_year, y = observations)) +
+  geom_point() +
+  facet_wrap(~year) +
+  theme_classic()
+```
+
+
+
 
 # Modelling data
 
@@ -77,7 +92,8 @@ model1 <- brm(
   family = negbinomial(),
   cores = 4,
   seed = 123,
-  backend = "cmdstan"
+  backend = "cmdstan",
+  refresh = 0
 )
 ```
 
@@ -119,10 +135,55 @@ tibble(day_of_year = seq(1, 365, by = 1)) |>
   theme_classic()
 ``` 
 
-This model doesn't come close to capturing the time dependent pattern of the data, but that was to be expected since this was a simple regression model. The next step is include the seasonality/time series nature of the data into the model. There are a couple of ways to do this
-- AR models
-- splines
-- gaussian processes
-- finding the periodicities in the data and including them as predictors
+This model doesn't come close to capturing the time dependent pattern of the data, but that was to be expected since this was a simple regression model. The next step is include the seasonality/time series nature of the data into the model. There are a couple of ways to do this:
+
+* AR models
+* splines
+* gaussian processes
+* finding the periodicities in the data and including them as predictors
+
+## Model 2
+
+- model 1, but with a spline on the day_of_year model
+
+```{r}
+model2_data <- cranes |>
+  mutate(day_of_year = yday(date)) |>
+  filter(!is.na(observations)) |>
+  mutate(observations = observations)
+
+model2 <- brm(
+  data = model2_data,
+  formula = observations ~ s(day_of_year),
+  family = negbinomial(),
+  cores = 4,
+  seed = 123,
+  backend = "cmdstan",
+)
+```
 
 
+```{r}
+model2 |> summary()
+
+pp_check(model2, ndraws = 100)
+
+loo(model1, model2)
+```
+
+
+```{r}
+tibble(day_of_year = seq(1, 365, by = 1)) |>
+  add_epred_draws(model2, ndraws = 100) |>
+  ggplot(aes(x = day_of_year)) +
+  geom_point(
+    data = model2_data,
+    aes(x = day_of_year, y = observations, colour = year(date)),
+    inherit.aes = FALSE
+  ) +
+  stat_lineribbon(aes(y = .epred), .width = c(.99, .95, .8, .5), alpha = 0.25) +
+  scale_fill_brewer(palette = "Greys") +
+  theme_classic()
+``` 
+
+plotting the predictions from the model on top of the true data, we see adding the splines definitely captured the rise and fall of the counts in the two time periods of the year where cranes were observed. However it doesn't capture the variance of the data, but that may be because we haven't included the year variable into the model.
