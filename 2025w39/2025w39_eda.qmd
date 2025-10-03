@@ -1,14 +1,16 @@
 ---
-title: "Untitled"
+title: "TidyTuesday Year 2025, Week 39"
 format: html
 ---
 
 
 # Loading Library and Data
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(here)
+library(brms)
+library(tidybayes)
 
 cranes <- readr::read_csv(
   'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-09-30/cranes.csv'
@@ -32,7 +34,8 @@ cranes |>
   theme_classic()
 ```
 
-- most of the observations are made are the beginning of the year and end of the year, the observations in the beginning of the year are more contiguous, vs the ones later in the year where observations are made every 2-3 days
+- there is a seasonal patter to the observed crane counts, with all the counts being made between ~day 75 - 120, and the second period being between ~day 225 - 300 
+- the observations in the beginning of the year are more contiguous, vs the ones later in the year where observations are made every 2-3 days
 
 
 
@@ -49,3 +52,77 @@ cranes |>
   geom_point() +
   theme_classic()
 ```
+
+
+# Modelling data
+
+## Model 1
+- Starting with a simple negative binomial regression model, with only day of year as a predictor
+- Let $Y_{t,y}$ be the number of crane observations on day $t$ of year $y$
+$$
+Y_{t, y} \sim \text{NegBinom}(\lambda) \ \ \ \log(\lambda) = \beta_0 + \beta_1 t
+$$
+
+
+
+```{r}
+model1_data <- cranes |>
+  mutate(day_of_year = yday(date)) |>
+  filter(!is.na(observations)) |>
+  mutate(observations = observations)
+
+model1 <- brm(
+  data = model1_data,
+  formula = observations ~ day_of_year,
+  family = negbinomial(),
+  cores = 4,
+  seed = 123,
+  backend = "cmdstan"
+)
+```
+
+
+```{r}
+model1 |> summary()
+```
+
+The R-hats, Bulk and ESS all look good
+
+
+```{r}
+pp_check(model1, ndraws = 100)
+```
+
+The posterior predictive check show the model follows the shape of the data, but doesn't capture the low counts well
+
+```{r}
+moddel1_loo <- loo(model1)
+moddel1_loo
+plot(moddel1_loo)
+```
+
+loo-cv check looks good, no problematic pareto k values
+
+
+```{r}
+
+tibble(day_of_year = seq(1, 365, by = 1)) |>
+  add_epred_draws(model1, ndraws = 100) |>
+  ggplot(aes(x = day_of_year)) +
+  stat_lineribbon(aes(y = .epred), .width = c(.99, .95, .8, .5), alpha = 0.25) +
+  geom_point(
+    data = model1_data,
+    aes(x = day_of_year, y = observations, colour = year(date)),
+    inherit.aes = FALSE
+  ) +
+  scale_fill_brewer(palette = "Greys") +
+  theme_classic()
+``` 
+
+This model doesn't come close to capturing the time dependent pattern of the data, but that was to be expected since this was a simple regression model. The next step is include the seasonality/time series nature of the data into the model. There are a couple of ways to do this
+- AR models
+- splines
+- gaussian processes
+- finding the periodicities in the data and including them as predictors
+
+
