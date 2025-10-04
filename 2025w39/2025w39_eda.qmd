@@ -3,7 +3,7 @@ title: "TidyTuesday Year 2025, Week 39"
 format: html
 ---
 
-These are just my rough notes exploring this [weeks](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-30/readme.md) Tidy Tuesday dataset on crane observations at Lake Hornborgasjön in Sweden.
+These are my rough notes exploring this [weeks](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-30/readme.md) Tidy Tuesday dataset on crane observations at Lake Hornborgasjön in Sweden.
 
 
 # Loading Library and Data
