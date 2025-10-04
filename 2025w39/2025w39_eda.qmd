@@ -3,6 +3,8 @@ title: "TidyTuesday Year 2025, Week 39"
 format: html
 ---
 
+These are just my rough notes exploring this [weeks](https://github.com/rfordatascience/tidytuesday/blob/main/data/2025/2025-09-30/readme.md) Tidy Tuesday dataset on crane observations at Lake Hornborgasjön in Sweden.
+
 
 # Loading Library and Data
 
@@ -34,7 +36,7 @@ cranes |>
   theme_classic()
 ```
 
-- there is a seasonal patter to the observed crane counts, with all the counts being made between ~day 75 - 120, and the second period being between ~day 225 - 300 
+- there is a seasonal pattern to the observed crane counts, with all the counts being made between ~day 75 - 120, and the second period being between ~day 225 - 300 
 - the observations in the beginning of the year are more contiguous, vs the ones later in the year where observations are made every 2-3 days
 
 
@@ -70,6 +72,9 @@ cranes |>
 
 
 # Modelling data
+
+- Rather then treating the entire time series as a single series, each years worth of data will be stacked on top of each other, like the plots shown above and our "time" variable will just be the day of year.
+- Each year have a pretty consistent pattern of crane observations, with two distinct peaks in the counts and I think capturing this will be easier with this approach, rather then trying to fit a single time series model to the entire dataset.
 
 ## Model 1
 - Starting with a simple negative binomial regression model, with only day of year as a predictor
@@ -142,13 +147,15 @@ This model doesn't come close to capturing the time dependent pattern of the dat
 * gaussian processes
 * finding the periodicities in the data and including them as predictors
 
+
+
 ## Model 2
 
 - model 1, but with a spline on the day_of_year model
 
 ```{r}
 model2_data <- cranes |>
-  mutate(day_of_year = yday(date)) |>
+  mutate(day_of_year = yday(date), year = year(date)) |>
   filter(!is.na(observations)) |>
   mutate(observations = observations)
 
@@ -173,8 +180,10 @@ loo(model1, model2)
 
 
 ```{r}
-tibble(day_of_year = seq(1, 365, by = 1)) |>
-  add_epred_draws(model2, ndraws = 100) |>
+expand_grid(
+  day_of_year = seq(1, 365, by = 1),
+) |>
+  add_epred_draws(model2, ndraws = 50) |>
   ggplot(aes(x = day_of_year)) +
   geom_point(
     data = model2_data,
@@ -184,6 +193,80 @@ tibble(day_of_year = seq(1, 365, by = 1)) |>
   stat_lineribbon(aes(y = .epred), .width = c(.99, .95, .8, .5), alpha = 0.25) +
   scale_fill_brewer(palette = "Greys") +
   theme_classic()
+
+
+expand_grid(
+  day_of_year = seq(1, 365, by = 1),
+  year = year(model2_data$date) |> unique()
+) |>
+  add_epred_draws(model2, ndraws = 50) |>
+  ggplot(aes(x = day_of_year)) +
+  geom_point(
+    data = model2_data,
+    aes(x = day_of_year, y = observations),
+    inherit.aes = FALSE
+  ) +
+  stat_lineribbon(aes(y = .epred), .width = c(.99, .95, .8, .5), alpha = 0.25) +
+  facet_wrap(~year) +
+  scale_fill_brewer(palette = "Greys") +
+  theme_classic()
 ``` 
 
-plotting the predictions from the model on top of the true data, we see adding the splines definitely captured the rise and fall of the counts in the two time periods of the year where cranes were observed. However it doesn't capture the variance of the data, but that may be because we haven't included the year variable into the model.
+plotting the predictions from the model on top of the true data, we see adding the splines definitely captured the rise and fall of the counts in the two time periods of the year where cranes were observed. However it doesn't capture the variance of the data, plotting the predictions facet by year shows that. but that may be because we haven't included the year variable into the model.
+
+
+## Model 3
+- model 2 but with year as a random effect
+- using a factor-smooth interaction spline (fs) to allow the smooth for day_of_year to vary by year
+
+```{r}
+model3_data <- cranes |>
+  mutate(day_of_year = yday(date), year = year(date)) |>
+  filter(!is.na(observations)) |>
+  mutate(observations = observations)
+
+model3 <- brm(
+  data = model3_data |> mutate(year = as.character(year)),
+  formula = observations ~ s(day_of_year, year, bs = "fs"),
+  family = negbinomial(),
+  cores = 4,
+  seed = 123,
+  backend = "cmdstan",
+)
+```
+
+
+
+```{r}
+model3 |> summary()
+
+pp_check(model3, ndraws = 100)
+
+loo(model3)
+```
+
+
+
+```{r}
+expand_grid(
+  day_of_year = seq(1, 365, by = 1),
+  year = c(2020, 2021, 2022)
+) |>
+  add_epred_draws(model3, ndraws = 20) |>
+  ggplot(aes(x = day_of_year)) +
+  geom_point(
+    data = model3_data |> filter(year %in% c(2020, 2021, 2022)),
+    aes(x = day_of_year, y = observations, colour = year),
+    inherit.aes = FALSE
+  ) +
+  geom_line(
+    aes(y = .epred, group = interaction(.draw, year)),
+    alpha = 0.4,
+    colour = "grey",
+  ) +
+  ylim(0, 20000) +
+  # stat_lineribbon(aes(y = .epred), alpha = 0.25) +
+  scale_fill_brewer(palette = "Greys") +
+  facet_wrap(~year) +
+  theme_classic()
+```
