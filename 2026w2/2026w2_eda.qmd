@@ -1,0 +1,61 @@
+---
+title: "2026w2"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(rnaturalearth)
+library(ggspatial)
+library(sf)
+
+# loading data
+africa <- readr::read_csv(
+  'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2026/2026-01-13/africa.csv'
+) |>
+  mutate(
+    country = recode(country, 'Congo' = 'Democratic Republic of the Congo')
+  )
+
+africa_boundry <- ne_countries(scale = 'medium', returnclass = 'sf') |>
+  select(name_long, continent, iso_a3, geometry) |>
+  filter(continent == 'Africa')
+
+```
+
+getting most commonly spoken lanuage in each country
+
+```{r}
+max_lang_count = africa |>
+  group_by(country) |>
+  filter(native_speakers == max(native_speakers)) |>
+  ungroup()
+
+left_join(
+  x = africa_boundry,
+  y = max_lang_count,
+  by = c('name_long' = 'country')
+) |>
+
+  ggplot(aes(fill = language)) +
+  geom_sf() +
+  ggtitle('Most common language spoken in each African Country')
+```
+
+
+getting number of languages spoken in each country
+
+```{r}
+africa |>
+  group_by(country) |>
+  summarise(num_languages = length(unique(language))) |>
+  ungroup() |>
+  left_join(
+    x = africa_boundry,
+    y = _,
+    by = c('name_long' = 'country')
+  ) |>
+  ggplot(aes(fill = num_languages)) +
+  geom_sf()
+```
